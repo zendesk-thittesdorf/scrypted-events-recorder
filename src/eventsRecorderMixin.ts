@@ -471,28 +471,34 @@ export class EventsRecorderMixin extends SettingsMixinDeviceBase<DeviceType> imp
                 const { detectionClasses, endTime, filename, startTime } = item;
 
                 if (startTime >= startTimeInner && startTime <= endTimeInner) {
-                    const durationInMs = endTime - startTime;
-                    const event = getMainDetectionClass(detectionClasses);
+                    try {
+                        const durationInMs = endTime - startTime;
+                        const event = getMainDetectionClass(detectionClasses);
 
-                    const { thumbnailUrl, videoclipUrl } = await this.getVideoclipWebhookUrls(filename);
-                    videoclips.push({
-                        id: filename,
-                        startTime,
-                        duration: Math.round(durationInMs),
-                        videoId: filename,
-                        thumbnailId: filename,
-                        detectionClasses: [...detectionClasses],
-                        event,
-                        description: pluginId,
-                        resources: {
-                            thumbnail: {
-                                href: thumbnailUrl
-                            },
-                            video: {
-                                href: videoclipUrl
+                        const { thumbnailUrl, videoclipUrl } = await this.getVideoclipWebhookUrls(filename);
+                        videoclips.push({
+                            id: filename,
+                            startTime,
+                            duration: Math.round(durationInMs),
+                            videoId: filename,
+                            thumbnailId: filename,
+                            detectionClasses: [...detectionClasses],
+                            event,
+                            description: pluginId,
+                            resources: {
+                                thumbnail: {
+                                    href: thumbnailUrl
+                                },
+                                video: {
+                                    href: videoclipUrl
+                                }
                             }
-                        }
-                    });
+                        });
+                    } catch (e) {
+                        // Do not let a single clip's webhook URL generation (e.g. missing
+                        // public/cloud endpoint support) blow up the entire clips list.
+                        this.getLogger().error(`Error building video clip entry for ${filename}`, e);
+                    }
                 }
             }
 
@@ -1098,7 +1104,13 @@ export class EventsRecorderMixin extends SettingsMixinDeviceBase<DeviceType> imp
     }
 
     async getVideoclipWebhookUrls(filename: string) {
-        const cloudEndpoint = await sdk.endpointManager.getCloudEndpoint(undefined, { public: true });
+        // Use the local endpoint rather than the cloud endpoint: getCloudEndpoint()
+        // always round-trips through mediaManager.convertMediaObjectToUrl(), which
+        // throws ("no converter found: text/x-local-uri to text/x-uri") unless a
+        // plugin providing that MIME conversion (e.g. Scrypted Cloud) is installed.
+        // getLocalEndpoint() produces the same kind of URL without that dependency,
+        // which is all that's needed for clips displayed in the local web UI.
+        const cloudEndpoint = await sdk.endpointManager.getLocalEndpoint(undefined, { public: true });
         const [endpoint, parameters] = cloudEndpoint.split('?') ?? '';
         const params = {
             deviceId: this.id,
