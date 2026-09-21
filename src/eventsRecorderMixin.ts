@@ -1104,21 +1104,28 @@ export class EventsRecorderMixin extends SettingsMixinDeviceBase<DeviceType> imp
     }
 
     async getVideoclipWebhookUrls(filename: string) {
-        // Use the local endpoint rather than the cloud endpoint: getCloudEndpoint()
-        // always round-trips through mediaManager.convertMediaObjectToUrl(), which
-        // throws ("no converter found: text/x-local-uri to text/x-uri") unless a
-        // plugin providing that MIME conversion (e.g. Scrypted Cloud) is installed.
-        // getLocalEndpoint() produces the same kind of URL without that dependency,
-        // which is all that's needed for clips displayed in the local web UI.
-        const cloudEndpoint = await sdk.endpointManager.getLocalEndpoint(undefined, { public: true });
+        // Use a relative path rather than an absolute cloud/local endpoint:
+        // - getCloudEndpoint() always round-trips through
+        //   mediaManager.convertMediaObjectToUrl(), which throws ("no converter
+        //   found: text/x-local-uri to text/x-uri") unless a plugin providing
+        //   that MIME conversion (e.g. Scrypted Cloud) is installed.
+        // - getLocalEndpoint() avoids that, but returns an absolute URL bound to
+        //   whatever IP/port the server detects itself as (e.g. https://10.0.1.10:10443),
+        //   which can differ from the hostname the browser is actually using
+        //   (e.g. https://server:10443), causing cert/host mismatches and blocked
+        //   requests in the browser.
+        // getPath() returns a same-origin relative path, so it always works
+        // regardless of the hostname used to reach the server.
+        const cloudEndpoint = await sdk.endpointManager.getPath(undefined, { public: true });
         const [endpoint, parameters] = cloudEndpoint.split('?') ?? '';
         const params = {
             deviceId: this.id,
             filename,
         }
 
-        const videoclipUrl = `${endpoint}videoclip?params=${JSON.stringify(params)}&${parameters}`;
-        const thumbnailUrl = `${endpoint}videoclipThumbnail?params=${JSON.stringify(params)}&${parameters}`;
+        const extraParams = parameters ? `&${parameters}` : '';
+        const videoclipUrl = `${endpoint}videoclip?params=${JSON.stringify(params)}${extraParams}`;
+        const thumbnailUrl = `${endpoint}videoclipThumbnail?params=${JSON.stringify(params)}${extraParams}`;
 
         return { videoclipUrl, thumbnailUrl };
     }
