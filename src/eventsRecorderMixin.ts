@@ -951,9 +951,25 @@ export class EventsRecorderMixin extends SettingsMixinDeviceBase<DeviceType> imp
     async storeEvent(details: EventDetails, data: ObjectsDetected) {
         const logger = this.getLogger();
 
-        if (data.detectionId) {
+        {
             try {
-                const mo = await this.cameraDevice.getDetectionInput(data.detectionId);
+                let mo: MediaObject;
+
+                if (data.detectionId) {
+                    mo = await this.cameraDevice.getDetectionInput(data.detectionId);
+                }
+
+                if (!mo) {
+                    // Cameras that run detection on-board (e.g. UniFi Direct) report
+                    // detections without a detectionId/detection input frame available.
+                    // Fall back to a live snapshot so these events still get indexed
+                    // instead of being silently dropped.
+                    try {
+                        mo = await this.cameraDevice.takePicture();
+                    } catch (e) {
+                        logger.debug(`No detection input or snapshot available for event ${data.detectionId}`, e);
+                    }
+                }
 
                 if (!mo) {
                     return;
