@@ -120,6 +120,36 @@ export class EventsRecorderMixin extends SettingsMixinDeviceBase<DeviceType> imp
             defaultValue: false,
             immediate: true,
         },
+        clipToDelete: {
+            title: 'Clip to delete',
+            description: 'Pick a recorded clip and press "Delete selected clip" below to permanently remove it (video + thumbnail).',
+            type: 'string',
+            combobox: true,
+            immediate: true,
+            onGet: async () => ({
+                choices: this.scanData.slice()
+                    .sort((a, b) => b.startTime - a.startTime)
+                    .map(item => this.describeClipChoice(item)),
+            }),
+        },
+        deleteSelectedClip: {
+            title: 'Delete selected clip',
+            description: 'Deletes the clip currently selected above. This cannot be undone.',
+            type: 'button',
+            onPut: async () => {
+                const logger = this.getLogger();
+                const selected = this.storageSettings.values.clipToDelete as string;
+                const filename = this.parseClipChoice(selected);
+                if (!filename) {
+                    logger.log(`No clip selected to delete`);
+                    return;
+                }
+
+                await this.removeVideoClips(filename);
+                this.storageSettings.values.clipToDelete = undefined;
+                await this.indexFs();
+            },
+        },
         processPid: {
             type: 'string',
             hide: true,
@@ -591,6 +621,24 @@ export class EventsRecorderMixin extends SettingsMixinDeviceBase<DeviceType> imp
                 }
             } catch {}
         }
+    }
+
+    // Builds a human-readable label for the "Clip to delete" dropdown that still
+    // embeds the underlying filename, so the selection can be parsed back out
+    // without needing separate value/label support (Setting.choices is string[]).
+    describeClipChoice(item: VideoclipFileData) {
+        const durationInSeconds = Math.round((item.endTime - item.startTime) / 1000);
+        const date = new Date(item.startTime).toLocaleString();
+        return `${date} (${durationInSeconds}s, ${item.detectionClasses.join(', ')}) — ${item.filename}`;
+    }
+
+    parseClipChoice(choice: string) {
+        if (!choice) {
+            return undefined;
+        }
+
+        const match = choice.match(/— (.+)$/);
+        return match ? match[1] : choice;
     }
 
     async removeVideoClips(...videoClipIds: string[]): Promise<void> {
