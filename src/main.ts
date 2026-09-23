@@ -234,6 +234,13 @@ export class EventsRecorderPlugin extends BasePlugin implements Settings, HttpRe
               }
             });
             return;
+          } else if (webhook === 'deleteVideoclip') {
+            devConsole.log(`Deleting videoclip via webhook: ${filename}`);
+            await dev.removeVideoClips(filename);
+            await dev.indexFs();
+
+            response.send('OK', { code: 200 });
+            return;
           }
         }
       } catch (e) {
