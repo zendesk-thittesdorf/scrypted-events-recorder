@@ -17,24 +17,34 @@
   const THUMB_MARKER = 'videoclipThumbnail?';
   const DELETE_MARKER = 'deleteVideoclip?';
 
+  // Positions the button over the image's own top-right corner using the
+  // image's actual layout box, rather than wrapping the <img> in a new
+  // element - the clip card is a flex row (img + text side by side), and
+  // wrapping the image breaks that layout.
+  function position(btn, img) {
+    btn.style.top = (img.offsetTop + 2) + 'px';
+    btn.style.left = (img.offsetLeft + img.offsetWidth - 24) + 'px';
+  }
+
   function decorate(img) {
     if (img.dataset.deleteBtnAdded) return;
     img.dataset.deleteBtnAdded = '1';
 
-    const wrapper = document.createElement('span');
-    wrapper.style.cssText = 'position:relative;display:inline-block;line-height:0;';
-    img.parentNode.insertBefore(wrapper, img);
-    wrapper.appendChild(img);
+    const parent = img.parentElement;
+    if (getComputedStyle(parent).position === 'static') {
+      parent.style.position = 'relative';
+    }
 
     const btn = document.createElement('button');
     btn.textContent = '\u{1F5D1}'; // 🗑
     btn.title = 'Delete this recorded clip';
     btn.style.cssText = [
-      'position:absolute', 'top:2px', 'right:2px', 'z-index:9999',
+      'position:absolute', 'z-index:9999',
       'background:rgba(0,0,0,.65)', 'color:#fff', 'border:none',
       'border-radius:4px', 'width:22px', 'height:22px', 'cursor:pointer',
       'font-size:13px', 'line-height:1', 'padding:0',
     ].join(';');
+    position(btn, img);
 
     btn.addEventListener('click', async (e) => {
       e.preventDefault();
@@ -48,8 +58,7 @@
         const res = await fetch(url);
         if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
 
-        const card = wrapper.parentElement;
-        if (card) card.remove();
+        parent.remove();
       } catch (err) {
         alert('Failed to delete clip: ' + err.message);
         btn.disabled = false;
@@ -57,7 +66,7 @@
       }
     });
 
-    wrapper.appendChild(btn);
+    parent.appendChild(btn);
   }
 
   function scan() {
